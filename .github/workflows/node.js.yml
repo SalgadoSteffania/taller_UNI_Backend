@@ -1,142 +1,116 @@
-# Nombre del workflow que aparecerá en la pestaña Actions de GitHub
+
 name: CI/CD Pipeline
 
-# Define cuándo se ejecutará este workflow
 on:
-  # Se ejecuta cuando hay un push a las ramas especificadas
   push:
     branches:
-      - main        # Rama principal
-      - develop     # Rama de desarrollo (opcional, puedes eliminarla si no la usas)
-
-  # Se ejecuta cuando se crea un Pull Request hacia estas ramas
+      - main   
+      
   pull_request:
     branches:
-      - main
-      - develop
+      - main     
 
-# Define las variables de entorno globales para todos los jobs
 env:
-  NODE_VERSION: '20.x'  # Versión de Node.js a utilizar
+  NODE_VERSION: '20.x'    
 
-# Define los trabajos (jobs) que se ejecutarán
 jobs:
-  # ============================================
-  # JOB 1: LINTING Y VERIFICACIÓN DE CÓDIGO
-  # ============================================
+   # JOB 1: Linting y verificación de codigo
   lint:
-    name: 🔍 Lint Code
-    runs-on: ubuntu-latest  # Sistema operativo donde se ejecutará
-
+    name: Lint Code
+    runs-on: ubuntu-latest   
     steps:
-      # Descarga el código del repositorio
-      - name: 📥 Checkout code
+      
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      # Configura Node.js en el runner
-      - name: 🔧 Setup Node.js
+        
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'  # Cachea las dependencias de npm para acelerar builds
+          cache: 'npm'    
 
-      # Instala las dependencias del proyecto
-      - name: 📦 Install dependencies
-        run: npm ci  # ci es más rápido y confiable que install para CI
+      - name: Install dependencies
+        run: npm ci         
 
-      # Ejecuta ESLint para verificar la calidad del código
-      - name: 🧹 Run ESLint
+      - name: Run ESLint
         run: npm run lint
 
-  # ============================================
-  # JOB 2: BUILD DEL PROYECTO
-  # ============================================
-  build:
-    name: 🏗️ Build Application
-    runs-on: ubuntu-latest
-    needs: lint  # Este job espera a que 'lint' termine exitosamente
 
+  # JOB 2: Build del proyecto.
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: lint
+    
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: npm ci
 
-      # Genera el cliente de Prisma (necesario para el build)
-      - name: 🔨 Generate Prisma Client
+      - name: Generate Prisma Client
         run: npx prisma generate
 
-      # Compila la aplicación NestJS
-      - name: 🏗️ Build project
+      - name: Build project
         run: npm run build
 
-      # Guarda los artefactos del build para usarlos en otros jobs
-      - name: 💾 Upload build artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
-          retention-days: 1  # Mantiene los artefactos por 1 día
+          retention-days: 1 
 
-  # ============================================
-  # JOB 3: TESTS UNITARIOS
-  # ============================================
+  # JOB 3: Tests Unitario
   test:
-    name: 🧪 Run Tests
+    name: Run Tests
     runs-on: ubuntu-latest
-    needs: build  # Espera a que el build termine
-
+    needs: build            
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: 🔨 Generate Prisma Client
+      - name: Generate Prisma Client
         run: npx prisma generate
 
-      # Ejecuta los tests unitarios con Jest
-      - name: 🧪 Run unit tests
+      - name: Run unit tests
         run: npm run test -- --passWithNoTests
-        # --passWithNoTests permite que pase aunque no haya tests (útil al iniciar)
-
-      # Ejecuta los tests con cobertura de código
-      - name: 📊 Run tests with coverage
+      
+      - name: Run tests with coverage
         run: npm run test:cov -- --passWithNoTests
 
-      # Sube el reporte de cobertura como artefacto
-      - name: 📈 Upload coverage report
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
           retention-days: 7
 
-  # ============================================
-  # JOB 4: NOTIFICACIÓN DE ESTADO (OPCIONAL)
-  # ============================================
+  # JOB 4: Notificacion de estado
   notify:
-    name: 📢 Notify Status
+    name: Notify Status
     runs-on: ubuntu-latest
     needs: [test]
-    if: always()  # Se ejecuta siempre, incluso si hay fallos
-
+    if: always()     
+    
     steps:
-      - name: 📊 Check workflow status
+      - name: Check workflow status
         run: |
           echo "Pipeline execution completed!"
-          echo "Deploy status: ${{ needs.deploy.result }}"
+          echo "Tests result: ${{ needs.test.result }}"
